@@ -1,0 +1,12 @@
+/node_modules
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing
+/coverage
+
+# Logs
+*.log
