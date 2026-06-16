@@ -81,6 +81,119 @@ const getWorkspaceProjects = asyncHandler(async (req, res) => {
   res.status(200).json({ projects, workspace });
 });
 
+const getWorkspaceStats = asyncHandler(async (req, res) => {
+  const workspaceId = req.workspace._id;
+
+  const [totalProjects, projects] = await Promise.all([
+    Project.countDocuments({ workspace: workspaceId }),
+    Project.find({ workspace: workspaceId })
+      .populate(
+        "tasks",
+        "title status dueDate project updatedAt isArchived priority"
+      )
+      .sort({ createdAt: -1 }),
+  ]);
+
+  const tasks = projects.flatMap((project) => project.tasks);
+  const countByStatus = (status) =>
+    tasks.filter((task) => task.status === status).length;
+
+  const stats = {
+    totalProjects,
+    totalTasks: tasks.length,
+    totalProjectInProgress: projects.filter((p) => p.status === "In Progress")
+      .length,
+    totalTaskCompleted: countByStatus("Done"),
+    totalTaskToDo: countByStatus("To Do"),
+    totalTaskInProgress: countByStatus("In Progress"),
+  };
+
+  const now = Date.now();
+  const upcomingTasks = tasks.filter((task) => {
+    if (!task.dueDate) return false;
+    const due = new Date(task.dueDate).getTime();
+    return due > now && due <= now + UPCOMING_WINDOW_MS;
+  });
+
+  const taskTrendsData = [
+    { name: "Sun", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Mon", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Tue", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Wed", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Thu", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Fri", completed: 0, inProgress: 0, toDo: 0 },
+    { name: "Sat", completed: 0, inProgress: 0, toDo: 0 },
+  ];
+
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    return date;
+  }).reverse();
+
+  const isSameDay = (a, b) =>
+    a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear();
+
+  // Iterates the task objects and counts the number of tasks completed,
+  // in progress, and to do for each day in the last 7 days.
+  for (const task of tasks) {
+    const taskDate = new Date(task.updatedAt);
+    const day = last7Days.find((date) => isSameDay(date, taskDate));
+
+    if (!day) continue;
+
+    const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
+    const dayData = taskTrendsData.find((d) => d.name === dayName);
+
+    if (!dayData) continue;
+
+    if (task.status === "Done") dayData.completed++;
+    else if (task.status === "In Progress") dayData.inProgress++;
+    else if (task.status === "To Do") dayData.toDo++;
+  }
+
+  const countProjectsByStatus = (status) =>
+    projects.filter((p) => p.status === status).length;
+
+  const projectStatusData = [
+    { name: "Completed", value: countProjectsByStatus("Completed") },
+    { name: "In Progress", value: countProjectsByStatus("In Progress") },
+    { name: "Planning", value: countProjectsByStatus("Planning") },
+  ];
+
+  const countByPriority = (priority) =>
+    tasks.filter((task) => task.priority === priority).length;
+
+  const taskPriorityData = [
+    { name: "High", value: countByPriority("High") },
+    { name: "Medium", value: countByPriority("Medium") },
+    { name: "Low", value: countByPriority("Low") },
+  ];
+
+  const workspaceProductivityData = projects.map((project) => {
+    const projectTasks = project.tasks;
+    return {
+      name: project.title,
+      completed: projectTasks.filter(
+        (task) => task.status === "Done" && !task.isArchived
+      ).length,
+      total: projectTasks.length,
+    };
+  });
+
+  res.status(200).json({
+    stats,
+    taskTrendsData,
+    projectStatusData,
+    taskPriorityData,
+    workspaceProductivityData,
+    upcomingTasks,
+    recentProjects: projects.slice(0, 5),
+  });
+});
+
 const inviteUserToWorkspace = asyncHandler(async (req, res) => {
   // The authorization middleware already enforced the role.
   const { workspace } = req;

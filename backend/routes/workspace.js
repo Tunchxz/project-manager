@@ -10,6 +10,7 @@ import {
   getWorkspaceDetails,
   getWorkspaceProjects,
   getWorkspaces,
+  getWorkspaceStats,
   inviteUserToWorkspace,
 } from "../controllers/workspace.js";
 import {
@@ -70,6 +71,13 @@ router.get(
   workspaceParam,
   requireWorkspaceMember("workspaceId"),
   getWorkspaceProjects
+);
+
+router.get(
+  "/:workspaceId/stats",
+  workspaceParam,
+  requireWorkspaceMember("workspaceId"),
+  getWorkspaceStats
 );
 
 router.delete(
