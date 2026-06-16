@@ -6,6 +6,7 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 
 import errorHandler from "./middleware/error-handler.js";
+import routes from "./routes/index.js";
 
 /**
  * Builds the Express application.
@@ -67,6 +68,8 @@ const createApp = () => {
       })
     );
   }
+
+  app.use("/api-v1", routes);
 
   // not found
   app.use((req, res) => {
