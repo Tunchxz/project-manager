@@ -132,6 +132,100 @@ const updateTaskPriority = asyncHandler(async (req, res) => {
   res.status(200).json(task);
 });
 
+const addSubTask = asyncHandler(async (req, res) => {
+  const { task } = req;
+  const { title } = req.body;
+
+  task.subtasks.push({ title, completed: false });
+  await task.save();
+
+  await recordActivity(req.user._id, "created_subtask", "Task", task._id, {
+    description: `created subtask ${title}`,
+  });
+
+  res.status(201).json(task);
+});
+
+const updateSubTask = asyncHandler(async (req, res) => {
+  const { task } = req;
+  const { subTaskId } = req.params;
+  const { completed } = req.body;
+
+  const subTask = task.subtasks.id(subTaskId);
+
+  if (!subTask) {
+    throw new NotFoundError("Subtask not found");
+  }
+
+  subTask.completed = completed;
+  await task.save();
+
+  await recordActivity(req.user._id, "updated_subtask", "Task", task._id, {
+    description: `updated subtask ${subTask.title}`,
+  });
+
+  res.status(200).json(task);
+});
+
+const getActivityByResourceId = asyncHandler(async (req, res) => {
+  const activity = await ActivityLog.find({ resourceId: req.task._id })
+    .populate("user", "name profilePicture")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(activity);
+});
+
+const getCommentsByTaskId = asyncHandler(async (req, res) => {
+  const comments = await Comment.find({ task: req.task._id })
+    .populate("author", "name profilePicture")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(comments);
+});
+
+const addComment = asyncHandler(async (req, res) => {
+  const { task } = req;
+  const { text } = req.body;
+
+  const newComment = await Comment.create({
+    text,
+    task: task._id,
+    author: req.user._id,
+  });
+
+  task.comments.push(newComment._id);
+  await task.save();
+
+  await recordActivity(req.user._id, "added_comment", "Task", task._id, {
+    description: `added comment ${summarize(text)}`,
+  });
+
+  res.status(201).json(newComment);
+});
+
+const watchTask = asyncHandler(async (req, res) => {
+  const { task } = req;
+  const isWatching = task.watchers.some(
+    (watcher) => watcher.toString() === req.user._id.toString()
+  );
+
+  if (isWatching) {
+    task.watchers = task.watchers.filter(
+      (watcher) => watcher.toString() !== req.user._id.toString()
+    );
+  } else {
+    task.watchers.push(req.user._id);
+  }
+
+  await task.save();
+
+  await recordActivity(req.user._id, "updated_task", "Task", task._id, {
+    description: `${isWatching ? "stopped watching" : "started watching"} task ${task.title}`,
+  });
+
+  res.status(200).json(task);
+});
+
 const archiveTask = asyncHandler(async (req, res) => {
   const { task } = req;
   const wasArchived = task.isArchived;
