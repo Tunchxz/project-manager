@@ -1,0 +1,16 @@
+.DS_Store
+/node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# React Router
+/.react-router/
+/build/
+
+# Testing
+/coverage/
+/playwright-report/
+/test-results/
